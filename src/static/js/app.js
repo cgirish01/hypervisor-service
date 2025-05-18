@@ -4,6 +4,9 @@ const App = {
   init() {
     this.setupEventListeners();
     this.checkAuthStatus();
+    
+    // Set up automatic refresh for deployments tab
+    this.setupAutoRefresh();
   },
 
   // Set up event listeners
@@ -118,6 +121,9 @@ const App = {
         if (tabName === 'deployments') {
           this.loadDeployments();
           this.loadClustersForDeploymentForm();
+          this.loadDeploymentsForDependencySelect();
+          // Immediately do one refresh to ensure we have the latest status
+          setTimeout(() => this.refreshDeployments(), 1000);
         }
       } else {
         content.classList.remove('active');
@@ -453,6 +459,17 @@ const App = {
         return;
       }
       
+      const statusIndicator = document.createElement('div');
+      statusIndicator.className = 'flex flex-between mb-1';
+      statusIndicator.innerHTML = `
+        <div></div>
+        <div class="flex flex-center">
+          <small>Live updates</small>
+          <span class="live-indicator"></span>
+        </div>
+      `;
+      deploymentList.appendChild(statusIndicator);
+      
       const table = document.createElement('table');
       table.innerHTML = `
         <thead>
@@ -641,13 +658,107 @@ const App = {
     }
   },
 
+  // Set up automatic refresh for deployment statuses
+  setupAutoRefresh() {
+    // Refresh deployments every 5 seconds when on the deployments tab
+    setInterval(() => {
+      const deploymentsTab = document.getElementById('deployments-content');
+      // Only refresh if deployments tab is active and user is logged in
+      if (deploymentsTab && deploymentsTab.classList.contains('active') && API.isAuthenticated()) {
+        this.refreshDeployments();
+      }
+    }, 5000);
+  },
+  
+  // Refresh deployments without full page reload
+  async refreshDeployments() {
+    try {
+      const deployments = await API.getDeployments();
+      
+      // Update status badges for existing deployments in the table
+      const rows = document.querySelectorAll('#deployment-list table tbody tr');
+      
+      rows.forEach(row => {
+        const deploymentId = row.querySelector('.actions button').dataset.id;
+        const deployment = deployments.find(d => d.id == deploymentId);
+        
+        if (deployment) {
+          // Get current status from DOM
+          const statusCell = row.querySelector('td:nth-child(3)');
+          if (statusCell) {
+            const currentStatus = statusCell.textContent.trim();
+            
+            // If status has changed, apply highlight effect
+            if (currentStatus !== deployment.status) {
+              // Remove any existing highlight class
+              row.classList.remove('highlight-change');
+              
+              // Force a DOM reflow to restart the animation
+              void row.offsetWidth;
+              
+              // Add the highlight class
+              row.classList.add('highlight-change');
+            }
+            
+            // Update status badge
+            statusCell.innerHTML = `<span class="badge badge-${deployment.status.toLowerCase()}">${deployment.status}</span>`;
+          }
+          
+          // Update action buttons based on new status
+          const actionsCell = row.querySelector('.actions');
+          if (actionsCell) {
+            actionsCell.innerHTML = this.getDeploymentActions(deployment);
+            
+            // Re-attach event listeners for new buttons
+            const startBtn = actionsCell.querySelector('.start-deployment');
+            if (startBtn) {
+              startBtn.addEventListener('click', () => this.startDeployment(startBtn.dataset.id));
+            }
+            
+            const stopBtn = actionsCell.querySelector('.stop-deployment');
+            if (stopBtn) {
+              stopBtn.addEventListener('click', () => this.stopDeployment(stopBtn.dataset.id));
+            }
+            
+            const cancelBtn = actionsCell.querySelector('.cancel-deployment');
+            if (cancelBtn) {
+              cancelBtn.addEventListener('click', () => this.cancelDeployment(cancelBtn.dataset.id));
+            }
+            
+            const deleteBtn = actionsCell.querySelector('.delete-deployment');
+            if (deleteBtn) {
+              deleteBtn.addEventListener('click', () => this.deleteDeployment(deleteBtn.dataset.id));
+            }
+          }
+        }
+      });
+      
+      // If deployment list is empty but we have deployments, or if there are new deployments, do a full reload
+      const currentIds = Array.from(rows).map(row => row.querySelector('.actions button').dataset.id);
+      const apiIds = deployments.map(d => d.id.toString());
+      
+      // Check if we need to do a full reload because we have new deployments or missing ones
+      const needsFullReload = 
+        (rows.length === 0 && deployments.length > 0) || 
+        (apiIds.some(id => !currentIds.includes(id))) ||
+        (currentIds.some(id => !apiIds.includes(id)));
+        
+      if (needsFullReload) {
+        this.loadDeployments();
+      }
+    } catch (error) {
+      console.error('Error refreshing deployments:', error);
+    }
+  },
+
   // Start a deployment
   async startDeployment(deploymentId) {
     try {
       await API.startDeployment(deploymentId);
       
       this.showAlert('Deployment started successfully!', 'success');
-      this.loadDeployments();
+      // Immediately refresh the deployment list to show updated status
+      this.refreshDeployments();
       // Also refresh clusters to show updated resource availability
       this.loadClusters();
     } catch (error) {
@@ -661,7 +772,8 @@ const App = {
       await API.stopDeployment(deploymentId);
       
       this.showAlert('Deployment stopped successfully!', 'success');
-      this.loadDeployments();
+      // Immediately refresh the deployment list to show updated status
+      this.refreshDeployments();
       // Also refresh clusters to show updated resource availability
       this.loadClusters();
     } catch (error) {
@@ -675,7 +787,8 @@ const App = {
       await API.cancelDeployment(deploymentId);
       
       this.showAlert('Deployment cancelled successfully!', 'success');
-      this.loadDeployments();
+      // Immediately refresh the deployment list to show updated status
+      this.refreshDeployments();
     } catch (error) {
       this.showAlert(error.message);
     }
@@ -691,7 +804,8 @@ const App = {
       await API.deleteDeployment(deploymentId);
       
       this.showAlert('Deployment deleted successfully!', 'success');
-      this.loadDeployments();
+      // Immediately refresh the deployment list to show updated status
+      this.refreshDeployments();
       // Also refresh clusters to show updated resource availability
       this.loadClusters();
     } catch (error) {
@@ -704,29 +818,77 @@ const App = {
     const dependencySelect = document.getElementById('deployment-dependencies');
     if (!dependencySelect) return;
     
+    // Get the priority dropdown so we can link the validation
+    const prioritySelect = document.getElementById('deployment-priority');
+    
     try {
-        const deployments = await API.getDeployments();
-        dependencySelect.innerHTML = '';
-        
-        if (deployments.length === 0) {
-            return;
+      const deployments = await API.getDeployments();
+      dependencySelect.innerHTML = '';
+      
+      if (deployments.length === 0) {
+        return;
+      }
+      
+      // Add option for each deployment
+      deployments.forEach(deployment => {
+        // Skip any deployments that are FAILED or CANCELLED
+        if (deployment.status === 'FAILED' || deployment.status === 'CANCELLED') {
+          return;
         }
         
-        // Add option for each deployment
-        deployments.forEach(deployment => {
-            // Skip any deployments that are FAILED or CANCELLED
-            if (deployment.status === 'FAILED' || deployment.status === 'CANCELLED') {
-                return;
-            }
-            
-            const option = document.createElement('option');
-            option.value = deployment.id;
-            option.textContent = `${deployment.name} (${deployment.status})`;
-            dependencySelect.appendChild(option);
-        });
+        const option = document.createElement('option');
+        option.value = deployment.id;
+        option.textContent = `${deployment.name} (${deployment.status} - ${this.getPriorityLabel(deployment.priority)})`;
+        option.dataset.status = deployment.status;
+        option.dataset.priority = deployment.priority;
+        dependencySelect.appendChild(option);
+      });
+      
+      // Add event listener to display warnings for high priority with lower priority pending dependencies
+      if (prioritySelect) {
+        prioritySelect.addEventListener('change', () => this.validateDependencyPriorities());
+        dependencySelect.addEventListener('change', () => this.validateDependencyPriorities());
         
+        // Initial validation
+        this.validateDependencyPriorities();
+      }
+      
     } catch (error) {
-        console.error('Error loading deployments for dependencies:', error);
+      console.error('Error loading deployments for dependencies:', error);
+    }
+  },
+  
+  // Add validation function for high priority deployments
+  validateDependencyPriorities() {
+    const prioritySelect = document.getElementById('deployment-priority');
+    const dependencySelect = document.getElementById('deployment-dependencies');
+    const warningElement = document.getElementById('dependency-priority-warning');
+    
+    // Remove existing warning if present
+    if (warningElement) {
+      warningElement.remove();
+    }
+    
+    // Only validate if both selects exist and high priority is selected
+    if (!prioritySelect || !dependencySelect || prioritySelect.value !== '3') {
+      return;
+    }
+    
+    // Check all selected dependencies
+    const selectedOptions = Array.from(dependencySelect.selectedOptions);
+    const lowerPriorityPending = selectedOptions.filter(option => 
+      option.dataset.status === 'pending' && parseInt(option.dataset.priority) < 3
+    );
+    
+    // Create warning if there are violations
+    if (lowerPriorityPending.length > 0) {
+      const warning = document.createElement('div');
+      warning.id = 'dependency-priority-warning';
+      warning.className = 'alert alert-warning';
+      warning.textContent = 'Warning: High priority deployments cannot depend on lower priority pending deployments. Some selected dependencies may be rejected.';
+      
+      // Insert after the dependencies select
+      dependencySelect.parentNode.insertBefore(warning, dependencySelect.nextSibling);
     }
   },
 };

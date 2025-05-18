@@ -59,6 +59,17 @@ def create_deployment(
                     status_code=400, 
                     detail=f"Dependency deployment with ID {dep_id} is not in the same cluster"
                 )
+            
+            # Validate priority rule: high priority deployments can't depend on lower priority pending deployments
+            if (deployment.priority == 3 and  # HIGH priority
+                dependency.status == DeploymentStatus.PENDING and
+                dependency.priority.value < 3):  # MEDIUM or LOW priority
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"High priority deployments cannot depend on lower priority pending deployments. "
+                           f"Dependency '{dependency.name}' (ID: {dependency.id}) is {dependency.priority.name} "
+                           f"priority and has status {dependency.status.value}."
+                )
     
     # Create the deployment
     db_deployment = deployment_service.create_deployment(db, deployment, current_user.id)
@@ -151,6 +162,21 @@ def update_deployment(
                 raise HTTPException(
                     status_code=400,
                     detail="Circular dependency detected"
+                )
+            
+            # Validate priority rule for high priority deployments
+            is_high_priority = False
+            
+            # Check if we're updating to high priority or if it's already high priority
+            if deployment.priority == 3 or (deployment.priority is None and db_deployment.priority.value == 3):
+                is_high_priority = True
+                
+            if is_high_priority and dependency.status == DeploymentStatus.PENDING and dependency.priority.value < 3:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"High priority deployments cannot depend on lower priority pending deployments. "
+                           f"Dependency '{dependency.name}' (ID: {dependency.id}) is {dependency.priority.name} "
+                           f"priority and has status {dependency.status.value}."
                 )
     
     # Update the deployment

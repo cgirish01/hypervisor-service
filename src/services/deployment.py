@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
+from fastapi import HTTPException
 
 from src.models.models import Deployment, DeploymentStatus, DeploymentPriority, Cluster, User
 from src.models.schemas import DeploymentCreate, DeploymentUpdate, DeploymentPriorityEnum
@@ -47,12 +48,52 @@ def get_pending_deployments(db: Session, cluster_id: Optional[int] = None):
     return query.order_by(Deployment.priority.desc(), Deployment.created_at).all()
 
 
+# Helper function to validate dependencies
+def validate_deployment_dependencies(db: Session, deployment: DeploymentCreate, dependencies: List[Deployment]) -> List[str]:
+    """
+    Validate that a deployment's dependencies meet business rules:
+    - High priority deployments cannot depend on lower priority pending deployments
+    
+    Returns a list of validation error messages, or an empty list if validation passes.
+    """
+    errors = []
+    
+    # For high priority deployments, check that they don't depend on lower priority pending deployments
+    if deployment.priority == DeploymentPriorityEnum.HIGH:
+        for dependency in dependencies:
+            # Check if dependency is pending and lower priority
+            if (dependency.status == DeploymentStatus.PENDING and 
+                (dependency.priority == DeploymentPriority.MEDIUM or 
+                 dependency.priority == DeploymentPriority.LOW)):
+                errors.append(
+                    f"High priority deployments cannot depend on lower priority pending deployments. "
+                    f"Dependency '{dependency.name}' (ID: {dependency.id}) is {dependency.priority.name} "
+                    f"priority and has status {dependency.status.value}."
+                )
+    
+    return errors
+
+
 def create_deployment(db: Session, deployment: DeploymentCreate, user_id: int):
     """Create a new deployment."""
     # Check if the cluster exists
     db_cluster = db.query(Cluster).filter(Cluster.id == deployment.cluster_id).first()
     if not db_cluster:
         return None
+    
+    # Get dependencies for validation
+    dependencies = []
+    if deployment.dependency_ids:
+        for dep_id in deployment.dependency_ids:
+            dependency = db.query(Deployment).filter(Deployment.id == dep_id).first()
+            if dependency:
+                dependencies.append(dependency)
+    
+    # Validate dependencies
+    validation_errors = validate_deployment_dependencies(db, deployment, dependencies)
+    if validation_errors:
+        # Return the first validation error by raising an exception
+        raise HTTPException(status_code=400, detail=validation_errors[0])
     
     # Create the deployment (initially in pending state)
     db_deployment = Deployment(
@@ -104,14 +145,37 @@ def update_deployment(db: Session, deployment_id: int, deployment: DeploymentUpd
     
     # Handle dependencies if provided
     if 'dependency_ids' in update_data and update_data['dependency_ids'] is not None:
+        # Get dependencies for validation
+        dependencies = []
+        for dep_id in update_data['dependency_ids']:
+            dependency = db.query(Deployment).filter(Deployment.id == dep_id).first()
+            if dependency:
+                dependencies.append(dependency)
+        
+        # Create a temporary DeploymentCreate object for validation
+        temp_deployment = DeploymentCreate(
+            name=db_deployment.name,
+            docker_image=db_deployment.docker_image,
+            required_ram=db_deployment.required_ram,
+            required_cpu=db_deployment.required_cpu,
+            required_gpu=db_deployment.required_gpu,
+            priority=update_data.get('priority', db_deployment.priority.value),
+            cluster_id=db_deployment.cluster_id,
+            dependency_ids=update_data['dependency_ids']
+        )
+        
+        # Validate dependencies
+        validation_errors = validate_deployment_dependencies(db, temp_deployment, dependencies)
+        if validation_errors:
+            # Return the first validation error by raising an exception
+            raise HTTPException(status_code=400, detail=validation_errors[0])
+        
         # Clear current dependencies
         db_deployment.dependencies = []
         
         # Add new dependencies
-        for dep_id in update_data['dependency_ids']:
-            dependency = db.query(Deployment).filter(Deployment.id == dep_id).first()
-            if dependency:
-                db_deployment.dependencies.append(dependency)
+        for dependency in dependencies:
+            db_deployment.dependencies.append(dependency)
         
         # Remove from update_data to avoid setAttribute error
         del update_data['dependency_ids']

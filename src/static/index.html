@@ -188,7 +188,10 @@
               <select id="deployment-dependencies" multiple size="4">
                 <!-- Options will be populated dynamically -->
               </select>
-              <small class="help-text">Hold Ctrl/Cmd to select multiple. These deployments must complete before this one starts.</small>
+              <small class="help-text">
+                Hold Ctrl/Cmd to select multiple. These deployments must complete before this one starts.<br>
+                <strong>Note:</strong> High priority deployments cannot depend on lower priority pending deployments.
+              </small>
             </div>
             <button type="submit">Create</button>
           </form>
