@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MLOps Hypervisor</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+  <!-- Alert container for messages -->
+  <div id="alert-container"></div>
+
+  <!-- Authentication container -->
+  <div class="auth-container card">
+    <h1>MLOps Hypervisor</h1>
+    <div class="tabs">
+      <div id="login-tab" class="tab active" onclick="App.switchAuthTab('login')">Login</div>
+      <div id="register-tab" class="tab" onclick="App.switchAuthTab('register')">Register</div>
+    </div>
+    
+    <!-- Login form -->
+    <form id="login-form">
+      <div class="form-group">
+        <label for="login-username">Username</label>
+        <input type="text" id="login-username" required>
+      </div>
+      <div class="form-group">
+        <label for="login-password">Password</label>
+        <input type="password" id="login-password" required>
+      </div>
+      <button type="submit">Login</button>
+    </form>
+    
+    <!-- Registration form -->
+    <form id="register-form" class="hidden">
+      <div class="form-group">
+        <label for="register-username">Username</label>
+        <input type="text" id="register-username" required>
+      </div>
+      <div class="form-group">
+        <label for="register-email">Email</label>
+        <input type="email" id="register-email" required>
+      </div>
+      <div class="form-group">
+        <label for="register-password">Password</label>
+        <input type="password" id="register-password" required>
+      </div>
+      <button type="submit">Register</button>
+    </form>
+  </div>
+
+  <!-- Main application container -->
+  <div class="app-container hidden">
+    <header>
+      <nav>
+        <h1>MLOps Hypervisor</h1>
+        <ul>
+          <li><span id="nav-username"></span></li>
+          <li><a href="#" id="logout-btn">Logout</a></li>
+        </ul>
+      </nav>
+    </header>
+    
+    <div class="container">
+      <div class="tabs">
+        <div class="tab active" data-tab="organizations">Organizations</div>
+        <div class="tab" data-tab="clusters">Clusters</div>
+        <div class="tab" data-tab="deployments">Deployments</div>
+      </div>
+      
+      <!-- Organizations tab content -->
+      <div id="organizations-content" class="tab-content active">
+        <div class="flex flex-between">
+          <h2>Organizations</h2>
+          <div>
+            <form id="join-org-form" class="flex">
+              <div class="form-group mr-1">
+                <input type="text" id="invite-code" placeholder="Enter Invite Code" required>
+              </div>
+              <button type="submit">Join</button>
+            </form>
+          </div>
+        </div>
+        
+        <div class="card">
+          <h3>Create Organization</h3>
+          <form id="create-org-form">
+            <div class="form-group">
+              <label for="org-name">Organization Name</label>
+              <input type="text" id="org-name" required>
+            </div>
+            <button type="submit">Create</button>
+          </form>
+        </div>
+        
+        <div class="card">
+          <h3>Your Organizations</h3>
+          <div id="org-list">
+            <div class="loader"></div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Clusters tab content -->
+      <div id="clusters-content" class="tab-content">
+        <h2>Clusters</h2>
+        
+        <div class="card">
+          <h3>Create Cluster</h3>
+          <form id="create-cluster-form">
+            <div class="form-group">
+              <label for="create-cluster-org">Organization</label>
+              <select id="create-cluster-org" required>
+                <!-- Options will be populated dynamically -->
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="cluster-name">Cluster Name</label>
+              <input type="text" id="cluster-name" required>
+            </div>
+            <div class="form-group">
+              <label for="cluster-ram">Total RAM (GB)</label>
+              <input type="number" id="cluster-ram" min="1" step="0.1" required>
+            </div>
+            <div class="form-group">
+              <label for="cluster-cpu">Total CPU (cores)</label>
+              <input type="number" id="cluster-cpu" min="1" step="0.1" required>
+            </div>
+            <div class="form-group">
+              <label for="cluster-gpu">Total GPU</label>
+              <input type="number" id="cluster-gpu" min="0" step="0.1" required>
+            </div>
+            <button type="submit">Create</button>
+          </form>
+        </div>
+        
+        <div class="card">
+          <h3>Your Clusters</h3>
+          <div id="cluster-list">
+            <div class="loader"></div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Deployments tab content -->
+      <div id="deployments-content" class="tab-content">
+        <h2>Deployments</h2>
+        
+        <div class="card">
+          <h3>Create Deployment</h3>
+          <form id="create-deployment-form">
+            <div class="form-group">
+              <label for="deployment-cluster">Cluster</label>
+              <select id="deployment-cluster" required>
+                <!-- Options will be populated dynamically -->
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="deployment-name">Deployment Name</label>
+              <input type="text" id="deployment-name" required>
+            </div>
+            <div class="form-group">
+              <label for="deployment-image">Docker Image</label>
+              <input type="text" id="deployment-image" placeholder="repository/image:tag" required>
+            </div>
+            <div class="form-group">
+              <label for="deployment-ram">Required RAM (GB)</label>
+              <input type="number" id="deployment-ram" min="0.1" step="0.1" required>
+            </div>
+            <div class="form-group">
+              <label for="deployment-cpu">Required CPU (cores)</label>
+              <input type="number" id="deployment-cpu" min="0.1" step="0.1" required>
+            </div>
+            <div class="form-group">
+              <label for="deployment-gpu">Required GPU</label>
+              <input type="number" id="deployment-gpu" min="0" step="0.1" required>
+            </div>
+            <div class="form-group">
+              <label for="deployment-priority">Priority</label>
+              <select id="deployment-priority" required>
+                <option value="1">Low</option>
+                <option value="2" selected>Medium</option>
+                <option value="3">High</option>
+              </select>
+            </div>
+            <button type="submit">Create</button>
+          </form>
+        </div>
+        
+        <div class="card">
+          <h3>Your Deployments</h3>
+          <div id="deployment-list">
+            <div class="loader"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Scripts -->
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html> 
