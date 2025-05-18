@@ -1,0 +1,89 @@
+@startuml MLOps Hypervisor Database Model
+
+' Define enums
+enum DeploymentStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum DeploymentPriority {
+  LOW (1)
+  MEDIUM (2)
+  HIGH (3)
+}
+
+' Define entities
+class User {
+  +id: Integer (PK)
+  +username: String (unique)
+  +email: String (unique)
+  +hashed_password: String
+  +is_active: Boolean
+  +created_at: DateTime
+}
+
+class Organization {
+  +id: Integer (PK)
+  +name: String (unique)
+  +invite_code: String (unique)
+  +created_at: DateTime
+}
+
+class Cluster {
+  +id: Integer (PK)
+  +name: String
+  +total_ram: Float
+  +total_cpu: Float
+  +total_gpu: Float
+  +available_ram: Float
+  +available_cpu: Float
+  +available_gpu: Float
+  +organization_id: Integer (FK)
+  +creator_id: Integer (FK)
+  +created_at: DateTime
+}
+
+class Deployment {
+  +id: Integer (PK)
+  +name: String
+  +docker_image: String
+  +status: DeploymentStatus
+  +priority: DeploymentPriority
+  +required_ram: Float
+  +required_cpu: Float
+  +required_gpu: Float
+  +cluster_id: Integer (FK)
+  +user_id: Integer (FK)
+  +created_at: DateTime
+  +started_at: DateTime (nullable)
+}
+
+' Define association tables
+class user_organization {
+  +user_id: Integer (FK)
+  +organization_id: Integer (FK)
+}
+
+class deployment_dependencies {
+  +dependent_id: Integer (FK, PK)
+  +dependency_id: Integer (FK, PK)
+}
+
+' Define relationships
+User "1" -- "many" user_organization
+Organization "1" -- "many" user_organization
+User "1" -- "many" Deployment
+User "1" -- "many" Cluster
+Organization "1" -- "many" Cluster
+Cluster "1" -- "many" Deployment
+Deployment "many" -- "many" Deployment : depends on
+
+' Connect association tables
+user_organization -- User
+user_organization -- Organization
+deployment_dependencies -- Deployment
+
+@enduml 
