@@ -1,28 +1,55 @@
 # MLOps Hypervisor Service
 
-A backend service that manages user authentication, organization membership, cluster resource allocation, and deployment scheduling. The service optimizes for deployment priority, resource utilization, and maximizing successful deployments.
+A backend service for managing user authentication, organization membership, cluster resource allocation, and deployment scheduling. The service optimizes for deployment priority, resource utilization, and maximizing successful deployments.
+
+---
+
+## Quickstart
+
+1. **Clone the repository and enter the directory:**
+   ```bash
+   git clone <repository-url>
+   cd hypervisor-service
+   ```
+2. **Start the stack with Docker Compose:**
+   ```bash
+   docker compose build
+   docker compose up -d
+   ```
+3. **Access the API:**
+   - API: [http://localhost:8000](http://localhost:8000)
+   - Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+4. **Run the test suite:**
+   ```bash
+   pytest --maxfail=3 --disable-warnings -v tests/
+   ```
+
+---
 
 ## Features
 
-- **User Authentication and Organization Management**
-  - Basic authentication (username and password)
-  - Organization membership with invite codes
-  - User management within organizations
+### Authentication & Authorization
+- **JWT-based authentication** (username and password login, JWT tokens for API access)
+- Organization membership with invite codes
+- User management within organizations
 
-- **Cluster Management**
-  - Create clusters with fixed resources (RAM, CPU, GPU)
-  - Track available and allocated resources
+### Cluster & Resource Management
+- Create clusters with fixed resources (RAM, CPU, GPU)
+- Track available and allocated resources
 
-- **Deployment Management**
-  - Create deployments with Docker images
-  - Queue deployments when resources are unavailable
-  - Preemption-based scheduling algorithm for high-priority deployments
-  - Deployment dependency, 
+### Deployment Management
+- Create deployments with Docker images
+- Queue deployments when resources are unavailable
+- Preemption-based scheduling for high-priority deployments
+- Deployment dependencies (auto-start when dependencies complete)
 
-- **Scheduling Algorithm**
-  - Prioritizes high-priority deployments
-  - Efficiently utilizes available resources
-  - Maximizes successful deployments
+### Scheduling Algorithm
+- Prioritizes high-priority deployments
+- Efficiently utilizes available resources
+- Maximizes successful deployments
+
+---
 
 ## Technology Stack
 
@@ -33,196 +60,80 @@ A backend service that manages user authentication, organization membership, clu
 - **Authentication**: JWT tokens
 - **Containerization**: Docker & Docker Compose
 
+---
+
 ## Project Structure
 
 ```
 .
-├── src/
-│   ├── api/                  # API routes
-│   ├── models/               # Database models
-│   ├── scheduler/            # Deployment scheduler
-│   ├── services/             # Business logic
-│   ├── static/               # Static assets (CSS, JS)
-│   ├── utils/                # Utilities
-│   └── main.py               # Application entry point
-├── tests/                    # Test files
-├── Dockerfile                # Docker container definition
-├── docker-compose.yml        # Multi-container Docker setup
-├── .dockerignore             # Files excluded from Docker build
-├── requirements.txt          # Python dependencies
-└── README.md                 # This file
+├── src/                # Application source code
+│   ├── api/            # API routes
+│   ├── models/         # Database models
+│   ├── scheduler/      # Deployment scheduler
+│   ├── services/       # Business logic
+│   ├── static/         # Static assets (CSS, JS)
+│   ├── utils/          # Utilities
+│   └── main.py         # Application entry point
+├── tests/              # Test files
+├── Dockerfile          # Docker container definition
+├── docker-compose.yml  # Multi-container Docker setup
+├── requirements.txt    # Python dependencies
+└── README.md           # This file
 ```
+
+---
 
 ## Setup and Installation
 
 ### Docker Setup (Recommended)
 
-1. Make sure you have Docker and Docker Compose installed:
-```bash
-docker --version
-docker compose version
-```
+1. Ensure you have Docker and Docker Compose installed:
+   ```bash
+   docker --version
+   docker compose version
+   ```
+2. Create a `.env` file with configuration (see below for example).
+3. Build and start the containers:
+   ```bash
+   docker compose build
+   docker compose up -d
+   ```
+4. Access the API at [http://localhost:8000](http://localhost:8000) and docs at [http://localhost:8000/docs](http://localhost:8000/docs).
 
-2. Create a `.env` file with appropriate configuration:
+#### Example .env file
 ```
-# Database configuration
 DATABASE_URL=postgresql://postgres:postgres@db:5432/hypervisor
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
 POSTGRES_DB=hypervisor
-
-# Authentication
 SECRET_KEY=your_secret_key_here
 ACCESS_TOKEN_EXPIRE_MINUTES=30
-
-# Redis configuration
 REDIS_URL=redis://redis:6379/0
-
-# Scheduler configuration
 SCHEDULER_INTERVAL_SECONDS=60
 SCHEDULER_INTERVAL=30
-
-# Server configuration
 PORT=8000
 ```
 
-3. Build and start the containers:
+---
+
+## API Authentication
+
+- All protected endpoints require a JWT Bearer token in the `Authorization` header.
+- Obtain a token via `POST /token` and use it in subsequent requests:
+
 ```bash
-docker compose build
-docker compose up -d
+# Example: Login and use JWT token with curl
+TOKEN=$(curl -s -X POST http://localhost:8000/token -d 'username=youruser&password=yourpass' | jq -r .access_token)
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/organizations/
 ```
 
-4. Check the status of your containers:
-```bash
-docker compose ps
-```
+- Full interactive API docs are available at [http://localhost:8000/docs](http://localhost:8000/docs).
 
-5. View logs:
-```bash
-docker compose logs -f web         # Web service logs
-docker compose logs -f scheduler   # Scheduler service logs
-docker compose logs -f worker      # Worker service logs
-```
-
-6. Stop the containers:
-```bash
-docker compose down        # Keep data volumes
-docker compose down -v     # Remove data volumes (deletes all data)
-```
-
-The API will be available at `http://localhost:8000`. Swagger documentation is available at `http://localhost:8000/docs`.
-
-### Local Development Setup
-
-> **Note:** Due to multiple dependencies (PostgreSQL, Redis) and the need to run several components separately, local development setup can be time-consuming and complex. The Docker container method above is strongly recommended for most users.
-
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd mlops-hypervisor
-```
-
-2. Set up PostgreSQL database:
-   - Install PostgreSQL if not already installed
-   - Create a database named `hypervisor`
-   - Create a user with appropriate permissions
-
-3. Set up Redis:
-   - Install Redis if not already installed
-   - Start the Redis server
-
-4. Create and activate a virtual environment:
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows, use: venv\Scripts\activate
-```
-
-5. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-6. Create a `.env` file in the project root with the following variables:
-```
-# Database configuration
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/hypervisor
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
-POSTGRES_DB=hypervisor
-
-# Authentication
-SECRET_KEY=your_secret_key_here
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-
-# Redis (for scheduler)
-REDIS_URL=redis://localhost:6379/0
-
-# Scheduler configuration
-SCHEDULER_INTERVAL_SECONDS=60
-SCHEDULER_INTERVAL=30
-
-# Server configuration
-PORT=8000
-```
-
-7. Run the main application:
-```bash
-python -m src.main
-```
-
-8. Run the scheduler (in a separate terminal):
-```bash
-python -m src.scheduler.run_scheduler
-```
-
-9. Run the worker (in a separate terminal):
-```bash
-python -m src.scheduler.worker
-```
-
-## Docker Architecture
-
-The application is containerized using Docker Compose with the following services:
-
-1. **Web**: FastAPI application serving the API
-2. **DB**: PostgreSQL database for data persistence
-3. **Redis**: In-memory data store for task queuing and caching
-4. **Scheduler**: Background service running the scheduler at regular intervals
-5. **Worker**: Service processing tasks from the Redis queue
-
-## API Endpoints
-
-- **Authentication**
-  - `POST /register`: Register a new user
-  - `POST /token`: Obtain access token (login)
-  - `POST /join-organization`: Join an organization using an invite code
-
-- **Organizations**
-  - `GET /organizations`: List organizations
-  - `POST /organizations`: Create a new organization
-  - `GET /organizations/{org_id}`: Get organization details
-  - `PUT /organizations/{org_id}`: Update an organization
-  - `DELETE /organizations/{org_id}`: Delete an organization
-  - `POST /organizations/{org_id}/regenerate-invite`: Regenerate invite code
-
-- **Clusters**
-  - `GET /clusters`: List clusters
-  - `POST /clusters`: Create a new cluster
-  - `GET /clusters/{cluster_id}`: Get cluster details
-  - `PUT /clusters/{cluster_id}`: Update a cluster
-  - `DELETE /clusters/{cluster_id}`: Delete a cluster
-
-- **Deployments**
-  - `GET /deployments`: List deployments
-  - `POST /deployments`: Create a new deployment
-  - `GET /deployments/{deployment_id}`: Get deployment details
-  - `PUT /deployments/{deployment_id}`: Update a deployment
-  - `DELETE /deployments/{deployment_id}`: Delete a deployment
-  - `POST /deployments/{deployment_id}/start`: Start a deployment
-  - `POST /deployments/{deployment_id}/stop`: Stop a deployment
-  - `POST /deployments/{deployment_id}/cancel`: Cancel a pending deployment
+---
 
 ## Test Suite
+
+> **Note:** Tests assume the API is running at `http://localhost:8000`.
 
 You can run all tests using:
 
@@ -266,6 +177,42 @@ All tests clean up after themselves, deleting any created users, organizations, 
 
 See the `tests/` directory for more details and to add your own tests.
 
+---
+
+## API Endpoints
+
+- **Authentication**
+  - `POST /register`: Register a new user
+  - `POST /token`: Obtain access token (login)
+  - `POST /join-organization`: Join an organization using an invite code
+
+- **Organizations**
+  - `GET /organizations`: List organizations
+  - `POST /organizations`: Create a new organization
+  - `GET /organizations/{org_id}`: Get organization details
+  - `PUT /organizations/{org_id}`: Update an organization
+  - `DELETE /organizations/{org_id}`: Delete an organization
+  - `POST /organizations/{org_id}/regenerate-invite`: Regenerate invite code
+
+- **Clusters**
+  - `GET /clusters`: List clusters
+  - `POST /clusters`: Create a new cluster
+  - `GET /clusters/{cluster_id}`: Get cluster details
+  - `PUT /clusters/{cluster_id}`: Update a cluster
+  - `DELETE /clusters/{cluster_id}`: Delete a cluster
+
+- **Deployments**
+  - `GET /deployments`: List deployments
+  - `POST /deployments`: Create a new deployment
+  - `GET /deployments/{deployment_id}`: Get deployment details
+  - `PUT /deployments/{deployment_id}`: Update a deployment
+  - `DELETE /deployments/{deployment_id}`: Delete a deployment
+  - `POST /deployments/{deployment_id}/start`: Start a deployment
+  - `POST /deployments/{deployment_id}/stop`: Stop a deployment
+  - `POST /deployments/{deployment_id}/cancel`: Cancel a pending deployment
+
+---
+
 ## Scheduler
 
 The system includes a background scheduler that:
@@ -305,6 +252,8 @@ At its core, the scheduler follows a two-phase, priority-driven, resource-aware 
 
 By splitting it into a "try without kicking anyone out" pass and then a "preempt if a high-priority job still can't fit" pass, the scheduler ensures maximum throughput while always giving precedence to the most critical deployments.
 
+---
+
 ## Production Considerations
 
 For production deployment:
@@ -317,6 +266,8 @@ For production deployment:
 6. Implement a backup strategy for PostgreSQL
 7. Enable Redis persistence for data reliability
 8. Scale worker instances based on workload
+
+---
 
 ## Troubleshooting
 
