@@ -67,6 +67,16 @@ def create_deployment(db: Session, deployment: DeploymentCreate, user_id: int):
         user_id=user_id
     )
     db.add(db_deployment)
+    db.flush()  # Flush to get the deployment ID
+    
+    # Add dependencies
+    if deployment.dependency_ids:
+        for dep_id in deployment.dependency_ids:
+            # Check if the dependency exists
+            dependency = db.query(Deployment).filter(Deployment.id == dep_id).first()
+            if dependency:
+                db_deployment.dependencies.append(dependency)
+    
     db.commit()
     db.refresh(db_deployment)
     
@@ -91,6 +101,20 @@ def update_deployment(db: Session, deployment_id: int, deployment: DeploymentUpd
     # Handle priority enum conversion
     if 'priority' in update_data and update_data['priority'] is not None:
         update_data['priority'] = map_priority_enum(update_data['priority'])
+    
+    # Handle dependencies if provided
+    if 'dependency_ids' in update_data and update_data['dependency_ids'] is not None:
+        # Clear current dependencies
+        db_deployment.dependencies = []
+        
+        # Add new dependencies
+        for dep_id in update_data['dependency_ids']:
+            dependency = db.query(Deployment).filter(Deployment.id == dep_id).first()
+            if dependency:
+                db_deployment.dependencies.append(dependency)
+        
+        # Remove from update_data to avoid setAttribute error
+        del update_data['dependency_ids']
     
     for key, value in update_data.items():
         setattr(db_deployment, key, value)
@@ -193,6 +217,12 @@ def start_deployment(db: Session, deployment_id: int):
     if not db_deployment or db_deployment.status != DeploymentStatus.PENDING:
         return None
     
+    # Check dependencies
+    for dependency in db_deployment.dependencies:
+        # If any dependency is not in COMPLETED status, can't start this deployment
+        if dependency.status != DeploymentStatus.COMPLETED:
+            return None
+    
     # Try to allocate resources
     if cluster_service.allocate_cluster_resources(
         db,
@@ -231,7 +261,32 @@ def stop_deployment(db: Session, deployment_id: int, status: DeploymentStatus = 
     db_deployment.status = status
     db.commit()
     db.refresh(db_deployment)
+    
+    # Check if any dependent deployments can now start
+    check_dependent_deployments(db, db_deployment.id)
+    
     return db_deployment
+
+
+def check_dependent_deployments(db: Session, completed_deployment_id: int):
+    """Check if any deployments dependent on the completed deployment can now start."""
+    db_deployment = get_deployment(db, completed_deployment_id)
+    if not db_deployment or db_deployment.status != DeploymentStatus.COMPLETED:
+        return
+    
+    # Get all deployments that depend on this one
+    for dependent in db_deployment.dependents:
+        if dependent.status == DeploymentStatus.PENDING:
+            # Check if all dependencies are completed
+            all_dependencies_completed = True
+            for dependency in dependent.dependencies:
+                if dependency.status != DeploymentStatus.COMPLETED:
+                    all_dependencies_completed = False
+                    break
+            
+            # If all dependencies are completed, try to start this deployment
+            if all_dependencies_completed:
+                start_deployment(db, dependent.id)
 
 
 def cancel_deployment(db: Session, deployment_id: int):

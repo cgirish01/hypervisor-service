@@ -510,6 +510,12 @@ const App = {
     } catch (error) {
       deploymentList.innerHTML = `<p class="alert alert-error">Error loading deployments: ${error.message}</p>`;
     }
+    
+    // Also update the cluster select
+    this.loadClustersForDeploymentForm();
+    
+    // Add dependency selection for creating deployments
+    this.loadDeploymentsForDependencySelect();
   },
 
   // Load clusters for the deployment form
@@ -599,19 +605,39 @@ const App = {
     const priority = parseInt(document.getElementById('deployment-priority').value);
     const clusterId = parseInt(document.getElementById('deployment-cluster').value);
     
+    // Get selected dependencies
+    const dependencySelect = document.getElementById('deployment-dependencies');
+    const dependencyIds = Array.from(dependencySelect.selectedOptions).map(option => parseInt(option.value));
+    
     try {
-      await API.createDeployment(name, dockerImage, requiredRam, requiredCpu, requiredGpu, priority, clusterId);
-      
-      document.getElementById('deployment-name').value = '';
-      document.getElementById('deployment-image').value = '';
-      document.getElementById('deployment-ram').value = '';
-      document.getElementById('deployment-cpu').value = '';
-      document.getElementById('deployment-gpu').value = '';
-      
-      this.showAlert(`Deployment "${name}" created successfully!`, 'success');
-      this.loadDeployments();
+        await API.createDeployment(
+            name, 
+            dockerImage, 
+            requiredRam, 
+            requiredCpu, 
+            requiredGpu, 
+            priority, 
+            clusterId,
+            dependencyIds
+        );
+        
+        document.getElementById('deployment-name').value = '';
+        document.getElementById('deployment-image').value = '';
+        document.getElementById('deployment-ram').value = '';
+        document.getElementById('deployment-cpu').value = '';
+        document.getElementById('deployment-gpu').value = '';
+        
+        // Clear dependency selection
+        if (dependencySelect.multiple) {
+            Array.from(dependencySelect.options).forEach(option => {
+                option.selected = false;
+            });
+        }
+        
+        this.showAlert(`Deployment "${name}" created successfully!`, 'success');
+        this.loadDeployments();
     } catch (error) {
-      this.showAlert(error.message);
+        this.showAlert(error.message);
     }
   },
 
@@ -670,6 +696,37 @@ const App = {
       this.loadClusters();
     } catch (error) {
       this.showAlert(error.message);
+    }
+  },
+
+  // New function to load deployments for dependency selection
+  async loadDeploymentsForDependencySelect() {
+    const dependencySelect = document.getElementById('deployment-dependencies');
+    if (!dependencySelect) return;
+    
+    try {
+        const deployments = await API.getDeployments();
+        dependencySelect.innerHTML = '';
+        
+        if (deployments.length === 0) {
+            return;
+        }
+        
+        // Add option for each deployment
+        deployments.forEach(deployment => {
+            // Skip any deployments that are FAILED or CANCELLED
+            if (deployment.status === 'FAILED' || deployment.status === 'CANCELLED') {
+                return;
+            }
+            
+            const option = document.createElement('option');
+            option.value = deployment.id;
+            option.textContent = `${deployment.name} (${deployment.status})`;
+            dependencySelect.appendChild(option);
+        });
+        
+    } catch (error) {
+        console.error('Error loading deployments for dependencies:', error);
     }
   },
 };

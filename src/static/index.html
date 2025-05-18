@@ -183,6 +183,13 @@
                 <option value="3">High</option>
               </select>
             </div>
+            <div class="form-group">
+              <label for="deployment-dependencies">Dependencies (Optional)</label>
+              <select id="deployment-dependencies" multiple size="4">
+                <!-- Options will be populated dynamically -->
+              </select>
+              <small class="help-text">Hold Ctrl/Cmd to select multiple. These deployments must complete before this one starts.</small>
+            </div>
             <button type="submit">Create</button>
           </form>
         </div>

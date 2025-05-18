@@ -125,6 +125,7 @@ class DeploymentBase(BaseModel):
 
 class DeploymentCreate(DeploymentBase):
     cluster_id: int
+    dependency_ids: List[int] = []  # IDs of deployments this deployment depends on
 
 
 class DeploymentUpdate(BaseModel):
@@ -135,6 +136,7 @@ class DeploymentUpdate(BaseModel):
     required_gpu: Optional[float] = Field(None, ge=0)
     priority: Optional[DeploymentPriorityEnum] = None
     status: Optional[DeploymentStatusEnum] = None
+    dependency_ids: Optional[List[int]] = None  # IDs of deployments this deployment depends on
 
 
 class DeploymentInDB(DeploymentBase):
@@ -149,8 +151,27 @@ class DeploymentInDB(DeploymentBase):
         orm_mode = True
 
 
+class DeploymentDependency(BaseModel):
+    dependency_id: int  # The ID of the deployment that must complete first
+
+
+# Simple deployment representation to avoid recursion
+class DeploymentBase2(BaseModel):
+    id: int
+    name: str
+    status: DeploymentStatusEnum
+    
+    class Config:
+        orm_mode = True
+
+
 class Deployment(DeploymentInDB):
-    pass
+    dependencies: List[DeploymentBase2] = []
+    dependents: List[DeploymentBase2] = []
+
+
+# Add a reference resolver for the recursive Deployment type
+Deployment.update_forward_refs()
 
 
 # Token Schemas

@@ -68,12 +68,17 @@ class DeploymentScheduler:
             return result
         
         # Get all running deployments with lower priority than our highest pending
-        highest_pending_priority = max([d.priority for d in remaining_pending])
+        highest_pending_priority_value = max([d.priority.value for d in remaining_pending])
         running_deployments = self.db.query(Deployment).filter(
             Deployment.cluster_id == cluster_id,
             Deployment.status == DeploymentStatus.RUNNING,
-            Deployment.priority < highest_pending_priority
-        ).order_by(Deployment.priority).all()
+        ).all()
+        
+        # Filter running deployments with lower priority manually
+        running_deployments = [d for d in running_deployments if d.priority.value < highest_pending_priority_value]
+        
+        # Sort by priority value
+        running_deployments.sort(key=lambda d: d.priority.value)
         
         # Try preemption
         if running_deployments and any(d.priority == DeploymentPriority.HIGH for d in remaining_pending):
@@ -122,7 +127,7 @@ class DeploymentScheduler:
         Returns a list of preempted deployment IDs.
         """
         # Sort running deployments by priority (low to high)
-        sorted_running = sorted(running_deployments, key=lambda d: (d.priority, d.started_at or datetime.min))
+        sorted_running = sorted(running_deployments, key=lambda d: (d.priority.value, d.started_at or datetime.min))
         
         # Resources needed
         required_ram = pending_deployment.required_ram
@@ -153,7 +158,7 @@ class DeploymentScheduler:
         # Try to preempt deployments until we have enough resources
         for deployment in sorted_running:
             # Skip if this deployment has higher or equal priority
-            if deployment.priority >= pending_deployment.priority:
+            if deployment.priority.value >= pending_deployment.priority.value:
                 continue
                 
             to_preempt.append(deployment.id)

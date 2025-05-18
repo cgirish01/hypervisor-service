@@ -175,7 +175,7 @@ const API = {
     return this.request('/deployments/');
   },
 
-  async createDeployment(name, dockerImage, requiredRam, requiredCpu, requiredGpu, priority, clusterId) {
+  async createDeployment(name, dockerImage, requiredRam, requiredCpu, requiredGpu, priority, clusterId, dependencyIds = []) {
     return this.request('/deployments/', {
       method: 'POST',
       body: JSON.stringify({
@@ -186,12 +186,21 @@ const API = {
         required_gpu: requiredGpu,
         priority,
         cluster_id: clusterId,
+        dependency_ids: dependencyIds
       }),
     });
   },
 
   async getDeployment(id) {
     return this.request(`/deployments/${id}`);
+  },
+
+  async getDeploymentDependencies(id) {
+    return this.request(`/deployments/${id}/dependencies`);
+  },
+
+  async getDeploymentDependents(id) {
+    return this.request(`/deployments/${id}/dependents`);
   },
 
   async updateDeployment(id, data) {

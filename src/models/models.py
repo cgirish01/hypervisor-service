@@ -13,6 +13,14 @@ user_organization = Table(
     Column("organization_id", Integer, ForeignKey("organizations.id"))
 )
 
+# Association table for deployment dependencies
+deployment_dependencies = Table(
+    "deployment_dependencies",
+    Base.metadata,
+    Column("dependent_id", Integer, ForeignKey("deployments.id"), primary_key=True),
+    Column("dependency_id", Integer, ForeignKey("deployments.id"), primary_key=True)
+)
+
 
 class DeploymentStatus(enum.Enum):
     PENDING = "pending"
@@ -100,4 +108,13 @@ class Deployment(Base):
     
     # Relationships
     cluster = relationship("Cluster", back_populates="deployments")
-    user = relationship("User", back_populates="deployments") 
+    user = relationship("User", back_populates="deployments")
+    
+    # Dependencies
+    dependencies = relationship(
+        "Deployment",
+        secondary=deployment_dependencies,
+        primaryjoin=(deployment_dependencies.c.dependent_id == id),
+        secondaryjoin=(deployment_dependencies.c.dependency_id == id),
+        backref="dependents"
+    ) 
