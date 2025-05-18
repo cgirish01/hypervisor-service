@@ -1,0 +1,67 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/hypervisor
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-changethisinproduction}
+    volumes:
+      - ./src:/app/src
+    restart: always
+    command: bash -c "chmod +x /app/src/start.sh && /app/src/start.sh"
+
+  db:
+    image: postgres:14
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=hypervisor
+    ports:
+      - "5432:5432"
+    restart: always
+
+  redis:
+    image: redis:7.0-alpine
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    restart: always
+    command: redis-server --save 60 1 --loglevel warning
+
+  scheduler:
+    build: .
+    depends_on:
+      - db
+      - redis
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/hypervisor
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-changethisinproduction}
+      - SCHEDULER_INTERVAL_SECONDS=60
+    command: python -m src.scheduler.run_scheduler
+    restart: always
+
+  worker:
+    build: .
+    depends_on:
+      - db
+      - redis
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/hypervisor
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-changethisinproduction}
+      - SCHEDULER_INTERVAL=30
+    command: python -m src.scheduler.worker
+    restart: always
+
+volumes:
+  postgres_data:
+  redis_data: 
