@@ -27,7 +27,7 @@ A backend service that manages user authentication, organization membership, clu
 
 - **Programming Language**: Python
 - **Web Framework**: FastAPI
-- **Database**: SQLite (can be configured to use other SQL databases)
+- **Database**: PostgreSQL
 - **Task Queue**: Redis
 - **Authentication**: JWT tokens
 
@@ -68,7 +68,7 @@ pip install -r requirements.txt
 4. Create a `.env` file based on the environment variables below:
 ```
 # Database configuration
-DATABASE_URL=sqlite:///./hypervisor.db
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/hypervisor
 
 # Authentication
 SECRET_KEY=your_secret_key_here
