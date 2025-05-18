@@ -222,6 +222,50 @@ The application is containerized using Docker Compose with the following service
   - `POST /deployments/{deployment_id}/stop`: Stop a deployment
   - `POST /deployments/{deployment_id}/cancel`: Cancel a pending deployment
 
+## Test Suite
+
+You can run all tests using:
+
+```bash
+pytest --maxfail=3 --disable-warnings -v tests/
+```
+
+Or to run only deployment tests:
+
+```bash
+pytest --maxfail=3 --disable-warnings -v tests/test_deployment_api.py
+```
+
+### What the tests check
+
+#### Authentication & Organization
+- **Register and Login:** Ensures user registration and login works.
+- **Join Organization:** Ensures users can join organizations via invite code.
+- **Organization CRUD:** Create, get, update, list, delete, and regenerate invite code for organizations.
+
+#### Cluster
+- **Cluster CRUD:** Create, get, update, list, and delete clusters. Ensures resource tracking and cleanup.
+
+#### Deployment
+- **Create Deployment:** Can create a deployment with or without dependencies.
+- **Get/Update/List/Delete Deployment:** Standard CRUD operations for deployments.
+- **Start/Stop/Cancel Deployment:** Can start, stop, and cancel deployments, with correct state transitions.
+- **Dependency Logic:**
+    - **test_start_deployment_with_dependency:**
+      - Ensures a deployment with a dependency cannot start until the dependency is completed.
+      - After the dependency is completed, the dependent deployment is auto-started if resources are available.
+    - **test_dependency_state_transitions:**
+      - Checks that if dep1 depends on dep2:
+        1. Both are initially pending.
+        2. Starting dep2 does not start dep1 (dep1 remains pending).
+        3. Completing dep2 causes dep1 to become running (auto-started by backend).
+- **Dependency/Dependent Endpoints:**
+    - Can fetch all dependencies and dependents for a deployment.
+
+All tests clean up after themselves, deleting any created users, organizations, clusters, or deployments (where possible).
+
+See the `tests/` directory for more details and to add your own tests.
+
 ## Scheduler
 
 The system includes a background scheduler that:
